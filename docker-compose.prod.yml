@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  stripe-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8247:8247"
+    environment:
+      - FLASK_ENV=production
+      - LOG_LEVEL=INFO
+      - REDIS_URL=redis://redis:6379
+    env_file:
+      - .env.production
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    depends_on:
+      - redis
+    networks:
+      - stripe-network
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - stripe-network
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME}
+      - RATE_LIMIT_PER_SECOND=${RATE_LIMIT_PER_SECOND:-10}
+      - RATE_LIMIT_BURST=${RATE_LIMIT_BURST:-20}
+    volumes:
+      - ./nginx.conf:/etc/nginx/templates/nginx.conf
+      - ./ssl:/etc/nginx/ssl
+    depends_on:
+      - stripe-backend
+    restart: unless-stopped
+    networks:
+      - stripe-network
+
+volumes:
+  redis_data:
+
+networks:
+  stripe-network:
+    driver: bridge

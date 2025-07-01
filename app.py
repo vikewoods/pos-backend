@@ -152,7 +152,7 @@ def create_payment_intent():
             payment_method_types=data.get('payment_method_types', ['card_present']),
             capture_method=data.get('capture_method', 'manual'),
             amount=amount,
-            currency=data.get('currency', 'usd'),
+            currency=data.get('currency', 'gbp'),
             description=data.get('description', 'Example PaymentIntent')[:500],  # Limit description
             receipt_email=data.get('receipt_email'),
         )
@@ -497,4 +497,5 @@ def internal_error_handler(e):
 
 
 if __name__ == '__main__':
-    app.run(debug=False, host='127.0.0.1', port=5000)
+    port = int(os.environ.get('APP_PORT', 8247))
+    app.run(host='0.0.0.0', port=port, debug=os.environ.get('FLASK_ENV') == 'development')
