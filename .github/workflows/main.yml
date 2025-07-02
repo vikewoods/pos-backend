@@ -1,4 +1,4 @@
-name: Deploy to Linode
+name: Deploy to Linode (AppleBoy/SSH-Action)
 
 on:
   push:
@@ -11,58 +11,35 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true))
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup SSH key
-      uses: webfactory/ssh-agent@v0.9.0
-      with:
-        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-    - name: Add server to known hosts
-      run: |
-        ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
-
     - name: Deploy to server
-      run: |
-        ssh root@${{ secrets.SERVER_HOST }} << 'EOF'
-          # Switch to deploy user and navigate to project directory
-          su - deploy -c "
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          # Switch to deploy user and run deployment
+          su - ${{ secrets.DEPLOY_USER }} -c "
             cd ${{ secrets.PROJECT_PATH }} &&
-            
-            # Pull latest changes
             git pull origin main &&
-            
-            # Stop existing containers
             docker-compose -f docker-compose.prod.yml down &&
-            
-            # Remove old images to save space (optional)
             docker image prune -f &&
-            
-            # Build and start new containers
             docker-compose -f docker-compose.prod.yml up -d --build &&
-            
-            # Clean up unused images and containers
             docker system prune -f &&
-            
-            # Show running containers for verification
             docker-compose -f docker-compose.prod.yml ps
           "
-        EOF
 
     - name: Health check
-      run: |
-        sleep 30
-        ssh root@${{ secrets.SERVER_HOST }} << 'EOF'
-          # Health check as deploy user
-          su - deploy -c "
-            # Basic health check - adjust URL based on your health endpoint
-            curl -f http://localhost:8247/health || echo 'Health check failed, but deployment completed'
-          "
-        EOF
-
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          sleep 30
+          su - ${{ secrets.DEPLOY_USER }} -c "curl -f http://localhost:8247/health || echo 'Health check failed, but deployment completed'"
 
     - name: Notify deployment status
       if: always()
