@@ -27,36 +27,42 @@ jobs:
 
     - name: Deploy to server
       run: |
-        ssh ${{ secrets.SSH_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
-          # Navigate to project directory
-          cd ${{ secrets.PROJECT_PATH }}
-          
-          # Pull latest changes
-          git pull origin main
-          
-          # Stop existing containers
-          docker-compose -f docker-compose.prod.yml down
-          
-          # Remove old images to save space (optional)
-          docker image prune -f
-          
-          # Build and start new containers
-          docker-compose -f docker-compose.prod.yml up -d --build
-          
-          # Clean up unused images and containers
-          docker system prune -f
-          
-          # Show running containers for verification
-          docker-compose -f docker-compose.prod.yml ps
+        ssh root@${{ secrets.SERVER_HOST }} << 'EOF'
+          # Switch to deploy user and navigate to project directory
+          su - deploy -c "
+            cd ${{ secrets.PROJECT_PATH }} &&
+            
+            # Pull latest changes
+            git pull origin main &&
+            
+            # Stop existing containers
+            docker-compose -f docker-compose.prod.yml down &&
+            
+            # Remove old images to save space (optional)
+            docker image prune -f &&
+            
+            # Build and start new containers
+            docker-compose -f docker-compose.prod.yml up -d --build &&
+            
+            # Clean up unused images and containers
+            docker system prune -f &&
+            
+            # Show running containers for verification
+            docker-compose -f docker-compose.prod.yml ps
+          "
         EOF
 
     - name: Health check
       run: |
         sleep 30
-        ssh ${{ secrets.SSH_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
-          # Basic health check - adjust URL based on your health endpoint
-          curl -f http://localhost:8247/health || echo "Health check failed, but deployment completed"
+        ssh root@${{ secrets.SERVER_HOST }} << 'EOF'
+          # Health check as deploy user
+          su - deploy -c "
+            # Basic health check - adjust URL based on your health endpoint
+            curl -f http://localhost:8247/health || echo 'Health check failed, but deployment completed'
+          "
         EOF
+
 
     - name: Notify deployment status
       if: always()
