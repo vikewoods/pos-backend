@@ -1,0 +1,21 @@
+name: Discord Notification
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  notify:
+    name: Notify Discord
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send notification
+        uses: rjstone/discord-webhook-notify@v1
+        with:
+          webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+          text: |
+            Workflow **${{ github.workflow }}** triggered by ${{ github.event_name }} event.
+            Status: ${{ job.status }}
+            Repository: ${{ github.repository }}
+            SHA: ${{ github.sha }}
