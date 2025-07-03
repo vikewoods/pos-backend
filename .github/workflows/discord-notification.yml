@@ -1,9 +1,9 @@
 name: Discord Notification
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+  workflow_run:
+    workflows: ["Deploy to Linode (AppleBoy/SSH-Action)"]
+    types:
+      - completed
 
 jobs:
   notify:
@@ -15,7 +15,12 @@ jobs:
         with:
           webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
           text: |
-            Workflow **${{ github.workflow }}** triggered by ${{ github.event_name }} event.
-            Status: ${{ job.status }}
-            Repository: ${{ github.repository }}
-            SHA: ${{ github.sha }}
+            🚀 **Deployment Complete**
+            
+            **Status:** ${{ github.event.workflow_run.conclusion == 'success' && '✅ Success' || '❌ Failed' }}
+            **Repository:** ${{ github.repository }}
+            **Branch:** ${{ github.event.workflow_run.head_branch }}
+            **Commit:** ${{ github.event.workflow_run.head_sha }}
+            **Triggered by:** ${{ github.event.workflow_run.triggering_actor.login }}
+            
+            [View Workflow Run](${{ github.event.workflow_run.html_url }})
