@@ -106,12 +106,12 @@ curl -X POST http://localhost:8247/capture_payment_intent \
 
 1. **Copy the environment template:**
 ```shell script
-   cp .env.example .env.production
+cp .env.example .env.production
 ```
 
 2. **Generate a secure API key:**
 ```shell script
-   python -c "import secrets; print('API_KEY=' + secrets.token_urlsafe(32))"
+python -c "import secrets; print('API_KEY=' + secrets.token_urlsafe(32))"
 ```
 
 3. **Configure your .env.production file:**
@@ -143,21 +143,21 @@ curl -X POST http://localhost:8247/capture_payment_intent \
 
 4. **Prepare SSLs:**
 ```shell script
-   mkdir -p ssl/
-   # Copy your SSL certificate files:
-   # ssl/cert.pem - Your SSL certificate
-   # ssl/key.pem - Your private key
+mkdir -p ssl/
+# Copy your SSL certificate files:
+# ssl/cert.pem - Your SSL certificate
+# ssl/key.pem - Your private key
 ```
 
 5. **Deploy with production configuration:**
 ```shell script
-  docker-compose -f docker-compose.prod.yml up -d --build
+docker-compose -f docker-compose.prod.yml up -d --build
 ```
 
 6. **Monitor the deployment:**
 ```shell script
-   docker-compose -f docker-compose.prod.yml ps
-   docker-compose -f docker-compose.prod.yml logs -f
+docker-compose -f docker-compose.prod.yml ps
+docker-compose -f docker-compose.prod.yml logs -f
 ```
 
 
