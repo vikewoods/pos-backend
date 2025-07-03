@@ -12,6 +12,28 @@ import base64
 logger = logging.getLogger(__name__)
 
 
+def require_api_key(f):
+    """Simple decorator to require API key authentication"""
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Get API key from header or query parameter
+        api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
+
+        if not api_key:
+            log_security_event('MISSING_API_KEY', 'API key not provided')
+            return jsonify({'error': 'API key required'}), 401
+
+        # Check against configured API key
+        if api_key != current_app.config['API_KEY']:
+            log_security_event('INVALID_API_KEY', f'Invalid API key attempt')
+            return jsonify({'error': 'Invalid API key'}), 403
+
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
 def validate_request_data(required_fields=None, optional_fields=None):
     """Decorator to validate request data"""
 

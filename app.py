@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 import os
 
 from config import Config
-from security import validate_request_data, log_security_event, SecurityHeaders
+from security import validate_request_data, log_security_event, SecurityHeaders, require_api_key
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -35,7 +35,8 @@ limiter = Limiter(
 CORS(app, origins=app.config['CORS_ORIGINS'], supports_credentials=True)
 
 # Security headers
-Talisman(app, force_https=False)  # Set to True in production
+is_production = os.environ.get('FLASK_ENV') == 'production'
+Talisman(app, force_https=is_production)
 
 # Configure Stripe
 stripe.api_key = app.config['STRIPE_SECRET_KEY']
@@ -74,6 +75,8 @@ def health_check():
 
 
 @app.route('/', methods=['GET'])
+@require_api_key
+@limiter.limit('5 per minute')
 def index():
     """Serve index.html"""
     try:
@@ -83,6 +86,7 @@ def index():
 
 
 @app.route('/register_reader', methods=['POST'])
+@require_api_key
 @limiter.limit("10 per minute")
 @validate_request_data(required_fields=['registration_code', 'label', 'location'])
 def register_reader():
@@ -113,7 +117,8 @@ def register_reader():
 
 
 @app.route('/connection_token', methods=['POST'])
-@limiter.limit("30 per minute")
+@require_api_key
+@limiter.limit("60 per minute")
 def connection_token():
     """Create a connection token"""
     validation_error = validate_api_key()
@@ -129,7 +134,8 @@ def connection_token():
 
 
 @app.route('/create_payment_intent', methods=['POST'])
-@limiter.limit("20 per minute")
+@require_api_key
+@limiter.limit("30 per minute")
 @validate_request_data(required_fields=['amount'])
 def create_payment_intent():
     """Create a PaymentIntent"""
@@ -168,7 +174,8 @@ def create_payment_intent():
 
 
 @app.route('/capture_payment_intent', methods=['POST'])
-@limiter.limit("20 per minute")
+@require_api_key
+@limiter.limit("30 per minute")
 @validate_request_data(required_fields=['payment_intent_id'])
 def capture_payment_intent():
     """Capture a PaymentIntent"""
@@ -199,7 +206,8 @@ def capture_payment_intent():
 
 
 @app.route('/cancel_payment_intent', methods=['POST'])
-@limiter.limit("20 per minute")
+@require_api_key
+@limiter.limit("30 per minute")
 @validate_request_data(required_fields=['payment_intent_id'])
 def cancel_payment_intent():
     """Cancel a PaymentIntent"""
@@ -224,7 +232,8 @@ def cancel_payment_intent():
 
 
 @app.route('/create_setup_intent', methods=['POST'])
-@limiter.limit("20 per minute")
+@require_api_key
+@limiter.limit("30 per minute")
 def create_setup_intent():
     """Create a SetupIntent"""
     validation_error = validate_api_key()
@@ -273,7 +282,8 @@ def lookup_or_create_example_customer():
 
 
 @app.route('/attach_payment_method_to_customer', methods=['POST'])
-@limiter.limit("10 per minute")
+@require_api_key
+@limiter.limit("30 per minute")
 @validate_request_data(required_fields=['payment_method_id'])
 def attach_payment_method_to_customer():
     """Attach PaymentMethod to Customer"""
@@ -304,7 +314,8 @@ def attach_payment_method_to_customer():
 
 
 @app.route('/update_payment_intent', methods=['POST'])
-@limiter.limit("20 per minute")
+@require_api_key
+@limiter.limit("30 per minute")
 @validate_request_data(required_fields=['payment_intent_id'])
 def update_payment_intent():
     """Update PaymentIntent"""
@@ -336,6 +347,7 @@ def update_payment_intent():
 
 
 @app.route('/list_locations', methods=['GET'])
+@require_api_key
 @limiter.limit("10 per minute")
 def list_locations():
     """List Terminal locations"""
@@ -358,6 +370,7 @@ def list_locations():
 
 
 @app.route('/create_location', methods=['POST'])
+@require_api_key
 @limiter.limit("5 per minute")
 @validate_request_data(required_fields=['display_name', 'address'])
 def create_location():
@@ -388,6 +401,7 @@ def create_location():
 # Add this new endpoint after your existing routes
 
 @app.route('/check_terminal_status', methods=['GET', 'POST'])
+@require_api_key
 @limiter.limit("30 per minute")
 def check_terminal_status():
     """Check the status of a Terminal reader"""
@@ -445,6 +459,7 @@ def check_terminal_status():
 
 
 @app.route('/list_readers', methods=['GET'])
+@require_api_key
 @limiter.limit("10 per minute")
 def list_readers():
     """List all Terminal readers (helpful for getting reader IDs)"""

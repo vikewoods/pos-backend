@@ -12,7 +12,7 @@ class Config:
     STRIPE_API_VERSION = '2020-03-02'
 
     # Security Configuration
-    SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key-change-this')
+    API_KEY = os.getenv('API_KEY', 'your-api-key-change-this')
 
     # Rate Limiting - Simple string instead of property
     RATE_LIMIT_STORAGE_URL = os.getenv('REDIS_URL', 'memory://')
