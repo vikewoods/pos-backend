@@ -31,7 +31,7 @@ python app.py
 ```
 
 
-Server runs on `http://localhost:5000`
+Server runs on `http://localhost:8247`
 
 ## Essential Environment Variables
 
@@ -59,12 +59,12 @@ CORS_ORIGINS=http://localhost:3000
 
 ```shell script
 # Create payment intent
-curl -X POST http://localhost:5000/create_payment_intent \
+curl -X POST http://localhost:8247/create_payment_intent \
   -H "Content-Type: application/json" \
   -d '{"amount": 2000, "currency": "usd"}'
 
 # Capture payment
-curl -X POST http://localhost:5000/capture_payment_intent \
+curl -X POST http://localhost:8247/capture_payment_intent \
   -H "Content-Type: application/json" \
   -d '{"payment_intent_id": "pi_xxx"}'
 ```
