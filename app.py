@@ -6,7 +6,7 @@ from flask_talisman import Talisman
 import stripe
 import logging
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 import os
 
 from config import Config
@@ -228,7 +228,7 @@ def process_payment():
 
 @app.route('/payment_status', methods=['GET', 'POST'])
 @require_api_key
-@limiter.limit("60 per minute")
+@limiter.limit("120 per minute")
 def payment_status():
     """Get payment intent status"""
 
@@ -312,21 +312,58 @@ def capture_payment_intent():
 @limiter.limit("30 per minute")
 @validate_request_data(required_fields=['payment_intent_id'])
 def cancel_payment_intent():
-    """Cancel a PaymentIntent"""
+    """Cancel payment intent and any ongoing terminal action"""
     data = request.sanitized_data
     payment_intent_id = data['payment_intent_id']
+    reader_id = data.get('reader_id')
+
+    log_info(f"Cancel payment request - PaymentIntent: {payment_intent_id}, Reader: {reader_id}")
 
     try:
-        # Validate payment intent ID format
-        if not payment_intent_id.startswith('pi_'):
-            return jsonify({'error': 'Invalid payment intent ID format'}), 400
+        # First cancel the terminal action if reader_id is provided
+        if reader_id:
+            log_info(f"Attempting to cancel terminal action for reader: {reader_id}")
+            try:
+                # Check current reader status
+                reader = stripe.terminal.Reader.retrieve(reader_id)
+                log_info(f"Reader status before cancel: {reader.status}")
 
-        payment_intent = stripe.PaymentIntent.cancel(payment_intent_id)
+                # Cancel any ongoing action on the terminal
+                cancel_result = stripe.terminal.Reader.cancel_action(reader_id)
+                log_info(f"Terminal action cancel result: {cancel_result}")
 
-        log_info(f"PaymentIntent canceled: {payment_intent_id}")
+                # Give the BBPOS WisePOS E more time to process the cancellation
+                time.sleep(5)
+
+                # Verify the cancellation worked
+                reader_after = stripe.terminal.Reader.retrieve(reader_id)
+                log_info(f"Reader status after cancel: {reader_after.status}")
+
+                # If the terminal is still not responding properly, log it
+                if reader_after.status != 'online':
+                    log_info(f"Warning: Reader status is {reader_after.status} after cancellation")
+
+            except stripe.error.InvalidRequestError as e:
+                error_msg = str(e)
+                if "no action to cancel" in error_msg.lower():
+                    log_info(f"No terminal action to cancel for reader {reader_id}")
+                elif "reader is offline" in error_msg.lower():
+                    log_info(f"Reader {reader_id} is offline")
+                else:
+                    log_info(f"Error canceling terminal action: {error_msg}")
+            except Exception as e:
+                log_info(f"Unexpected error during terminal cancellation: {str(e)}")
+        else:
+            log_info("No reader_id provided - skipping terminal action cancellation")
+
+        # Cancel the payment intent
+        canceled_intent = stripe.PaymentIntent.cancel(payment_intent_id)
+        log_info(f"Payment intent canceled: {payment_intent_id}")
+
         return jsonify({
-            'intent': payment_intent.id,
-            'secret': payment_intent.client_secret
+            'intent': canceled_intent.id,
+            'status': canceled_intent.status,
+            'message': 'Payment canceled successfully. If terminal screen is still showing payment, please press the red cancel button on the terminal or try to restart by holding power button.'
         })
 
     except stripe.error.StripeError as e:
@@ -446,6 +483,75 @@ def update_payment_intent():
 
     except stripe.error.StripeError as e:
         return handle_stripe_error(e)
+
+
+@app.route('/payment_history', methods=['GET'])
+@require_api_key
+@limiter.limit("30 per minute")
+def payment_history():
+    """Get payment intents history"""
+    try:
+        # Get query parameters
+        limit = min(int(request.args.get('limit', 50)), 100)  # Max 100, default 50
+        starting_after = request.args.get('starting_after')  # For pagination
+
+        # Build query parameters for Stripe
+        stripe_params = {
+            'limit': limit,
+            'expand': ['data.latest_charge']  # Include charge details
+        }
+
+        if starting_after:
+            stripe_params['starting_after'] = starting_after
+
+        # Get payment intents from Stripe
+        payment_intents = stripe.PaymentIntent.list(**stripe_params)
+
+        # Format the response
+        payments = []
+        for pi in payment_intents.data:
+            # Get charge details if available
+            charge_info = None
+            if pi.latest_charge:
+                charge = pi.latest_charge
+                charge_info = {
+                    'id': charge.id,
+                    'payment_method_details': charge.payment_method_details,
+                    'receipt_url': charge.receipt_url,
+                    'created': charge.created
+                }
+
+            payment_data = {
+                'id': pi.id,
+                'amount': pi.amount,
+                'currency': pi.currency,
+                'status': pi.status,
+                'created': pi.created,
+                'description': pi.description,
+                'client_secret': pi.client_secret,
+                'can_capture': pi.status == 'requires_capture',
+                'is_succeeded': pi.status == 'succeeded',
+                'is_canceled': pi.status == 'canceled',
+                'amount_received': pi.amount_received,
+                'charges_count': len(pi.charges.data) if pi.charges else 0,
+                'latest_charge': charge_info,
+                'last_payment_error': pi.last_payment_error
+            }
+            payments.append(payment_data)
+
+        log_info(f"Payment history retrieved: {len(payments)} payments")
+
+        return jsonify({
+            'payments': payments,
+            'has_more': payment_intents.has_more,
+            'total_count': len(payments)
+        })
+
+    except stripe.error.StripeError as e:
+        return handle_stripe_error(e)
+    except Exception as e:
+        log_info(f"Error retrieving payment history: {str(e)}")
+        return jsonify({'error': 'Failed to retrieve payment history'}), 500
 
 
 @app.route('/list_locations', methods=['GET'])
