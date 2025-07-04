@@ -173,6 +173,108 @@ def create_payment_intent():
         return handle_stripe_error(e)
 
 
+@app.route('/process_payment', methods=['POST'])
+@require_api_key
+@limiter.limit("30 per minute")
+@validate_request_data(required_fields=['payment_intent_id', 'reader_id'])
+def process_payment():
+    """Process payment on physical terminal (BBPOS WisePOS E)"""
+    data = request.sanitized_data
+    payment_intent_id = data['payment_intent_id']
+    reader_id = data['reader_id']
+
+    try:
+        # Validate payment intent ID format
+        if not payment_intent_id.startswith('pi_'):
+            return jsonify({'error': 'Invalid payment intent ID format'}), 400
+
+        # Validate reader ID format
+        if not reader_id.startswith('tmr_'):
+            return jsonify({'error': 'Invalid reader ID format'}), 400
+
+        # First, check if reader is online
+        reader = stripe.terminal.Reader.retrieve(reader_id)
+        if reader.status != 'online':
+            return jsonify({'error': f'Reader is {reader.status}. Reader must be online to process payments.'}), 400
+
+        # Process the payment on the terminal
+        # This actually sends the payment to the physical terminal
+        process_payment_intent = stripe.terminal.Reader.process_payment_intent(
+            reader_id,
+            payment_intent=payment_intent_id
+        )
+
+        log_info(f"Payment sent to terminal: {reader_id}, PaymentIntent: {payment_intent_id}")
+
+        return jsonify({
+            'intent': payment_intent_id,
+            'reader_id': reader_id,
+            'status': 'processing',
+            'message': 'Payment sent to terminal. Please present card to complete the transaction.',
+            'process_payment_intent': process_payment_intent.id if hasattr(process_payment_intent, 'id') else None
+        })
+
+    except stripe.error.InvalidRequestError as e:
+        error_msg = str(e)
+        if "reader is not online" in error_msg.lower():
+            return jsonify({'error': 'Reader is not online. Please check terminal connection.'}), 400
+        elif "reader not found" in error_msg.lower():
+            return jsonify({'error': 'Reader not found. Please check reader ID.'}), 404
+        else:
+            return jsonify({'error': f'Invalid request: {error_msg}'}), 400
+    except stripe.error.StripeError as e:
+        return handle_stripe_error(e)
+
+
+@app.route('/payment_status', methods=['GET', 'POST'])
+@require_api_key
+@limiter.limit("60 per minute")
+def payment_status():
+    """Get payment intent status"""
+
+    # Get payment intent ID from request
+    if request.method == 'GET':
+        payment_intent_id = request.args.get('payment_intent_id')
+    else:  # POST
+        data = request.get_json() or {}
+        payment_intent_id = data.get('payment_intent_id')
+
+    if not payment_intent_id:
+        return jsonify({'error': 'payment_intent_id is required'}), 400
+
+    try:
+        # Validate payment intent ID format
+        if not payment_intent_id.startswith('pi_'):
+            return jsonify({'error': 'Invalid payment intent ID format'}), 400
+
+        payment_intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+
+        log_info(f"Payment status checked: {payment_intent_id}, status: {payment_intent.status}")
+
+        return jsonify({
+            'intent': payment_intent.id,
+            'secret': payment_intent.client_secret,
+            'status': payment_intent.status,
+            'amount': payment_intent.amount,
+            'currency': payment_intent.currency,
+            'can_capture': payment_intent.status == 'requires_capture',
+            'is_succeeded': payment_intent.status == 'succeeded',
+            'is_canceled': payment_intent.status == 'canceled',
+            'last_payment_error': payment_intent.last_payment_error,
+            'charges': [
+                {
+                    'id': charge.id,
+                    'amount': charge.amount,
+                    'status': charge.status,
+                    'payment_method_details': charge.payment_method_details
+                } for charge in payment_intent.charges.data
+            ] if payment_intent.charges else []
+        })
+
+    except stripe.error.StripeError as e:
+        return handle_stripe_error(e)
+
+
 @app.route('/capture_payment_intent', methods=['POST'])
 @require_api_key
 @limiter.limit("30 per minute")
