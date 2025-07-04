@@ -277,7 +277,7 @@ def payment_status():
 
 @app.route('/capture_payment_intent', methods=['POST'])
 @require_api_key
-@limiter.limit("30 per minute")
+@limiter.limit("45 per minute")
 @validate_request_data(required_fields=['payment_intent_id'])
 def capture_payment_intent():
     """Capture a PaymentIntent"""
@@ -309,7 +309,7 @@ def capture_payment_intent():
 
 @app.route('/cancel_payment_intent', methods=['POST'])
 @require_api_key
-@limiter.limit("30 per minute")
+@limiter.limit("45 per minute")
 @validate_request_data(required_fields=['payment_intent_id'])
 def cancel_payment_intent():
     """Cancel payment intent and any ongoing terminal action"""
@@ -372,7 +372,7 @@ def cancel_payment_intent():
 
 @app.route('/create_setup_intent', methods=['POST'])
 @require_api_key
-@limiter.limit("30 per minute")
+@limiter.limit("45 per minute")
 def create_setup_intent():
     """Create a SetupIntent"""
     validation_error = validate_api_key()
@@ -487,7 +487,7 @@ def update_payment_intent():
 
 @app.route('/payment_history', methods=['GET'])
 @require_api_key
-@limiter.limit("30 per minute")
+@limiter.limit("60 per minute")
 def payment_history():
     """Get payment intents history"""
     try:
@@ -610,7 +610,7 @@ def create_location():
 
 @app.route('/check_terminal_status', methods=['GET', 'POST'])
 @require_api_key
-@limiter.limit("30 per minute")
+@limiter.limit("90 per minute")
 def check_terminal_status():
     """Check the status of a Terminal reader"""
     validation_error = validate_api_key()
@@ -668,7 +668,7 @@ def check_terminal_status():
 
 @app.route('/list_readers', methods=['GET'])
 @require_api_key
-@limiter.limit("10 per minute")
+@limiter.limit("180 per minute")
 def list_readers():
     """List all Terminal readers (helpful for getting reader IDs)"""
     validation_error = validate_api_key()
