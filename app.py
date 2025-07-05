@@ -70,7 +70,7 @@ def after_request(response):
 
 # Health check endpoint
 @app.route('/health', methods=['GET'])
-@limiter.exempt
+@limiter.limit('320 per minute')
 def health_check():
     return jsonify({'status': 'healthy', 'timestamp': datetime.utcnow().isoformat()})
 
