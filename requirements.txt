@@ -7,3 +7,5 @@ flask-talisman==1.1.0
 cryptography==41.0.7
 pyjwt==2.8.0
 redis==5.0.1
+gunicorn==21.2.0
+
